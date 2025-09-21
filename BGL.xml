@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='ISO-8859-1'?>
+<BGL_Import_Export>
+    <Supplier>BGL</Supplier>
+    <Product>SF360</Product>
+    <Version>1.2</Version>
+    <Entity_Details>
+        <Entity_Code>BGL</Entity_Code>
+        <Transactions>
+            <Transaction>
+                <Transaction_Type>Bank Transaction</Transaction_Type>
+                <Amount>-6043.43</Amount>
+                <Currency>USD</Currency>
+                <Transaction_Date>13/05/2025</Transaction_Date>
+                <Transaction_ID>BKIV250512PLXbuy85</Transaction_ID>
+            </Transaction>
+            <Transaction>
+                <Transaction_Type>Investment Transaction</Transaction_Type>
+                <Transaction_Date>12/05/2025</Transaction_Date>
+                <Description>BUY 3476.0000 SHARES OF PLX @ 1.73000ISIN# US74365A3095 (PROTALIX BIOTHERAPEUTICS INC COM NEW UNSOLICITED ORDER)</Description>
+                <Amount>6043.43</Amount>
+                <Currency>USD</Currency>
+                <Security_Type>Shares in Listed Companies (Overseas)</Security_Type>
+                <Security_Code>PLX.NYE</Security_Code>
+                <Quantity>3476</Quantity>
+                <Brokerage>29.95</Brokerage>
+                <Settlement_Date>13/05/2025</Settlement_Date>
+                <Contract_Date>12/05/2025</Contract_Date>
+                <Transaction_ID>IVIV250512PLXbuy85</Transaction_ID>
+            </Transaction>
+        </Transactions>
+    </Entity_Details>
+</BGL_Import_Export>
