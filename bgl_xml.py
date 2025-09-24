@@ -1,21 +1,45 @@
+"""Utilities for translating transaction histories into the XML structure
+expected by BGL Simple Fund 360 imports.
+
+The module constructs the XML document using ``xml.etree.ElementTree`` and
+offers helpers to create properly formatted transactions for both the bank and
+investment ledgers.  It serves as the central conversion point for the
+``bgl_xml_test`` example as well as any other callers that provide raw trade
+data.
+"""
+
 import xml.etree.ElementTree as ET
 
 sp="    "
 
 
+# Function: new_transaction
+# Parameters
+#     root: The ElementTree root that contains the ``Transactions`` element.
+#     dic: Dictionary of key/value pairs representing a transaction row.
+#     end_row: Flag to control trailing whitespace/indentation when the row is
+#              the final entry in the XML block.
+# Summary
+#     Locate the <Transactions> container and append a new <Transaction>
+#     element with children for each supplied field.  Whitespace is carefully
+#     managed so that the emitted XML is human readable and matches the format
+#     expected by downstream tooling.
 def new_transaction(root,dic,end_row=False):
+    # Find the <Transactions> element that will house each new transaction.
     transactions = root.find(".//Transactions")
+    # Create the <Transaction> node that will hold the field sub-elements.
     element=ET.SubElement(transactions,"Transaction")
     element.text="\n"+sp+sp+sp+sp
     if end_row==True:
         element.tail="\n"+sp+sp
     else:
-        element.tail="\n"+sp+sp+sp   
+        element.tail="\n"+sp+sp+sp
     len_dic=len(dic)
     k=0
     for key in dic.keys():
         print(key, dic[key])
         #transaction_sub_element(root,key,transaction[key])
+        # Each key/value becomes a child node such as <Amount> or <Currency>.
         sub_element=ET.SubElement(element,key)
         sub_element.text=dic[key]
         if k==len_dic-1:
@@ -25,11 +49,21 @@ def new_transaction(root,dic,end_row=False):
         k=k+1
     return root
 
+# Function: ticker_bgl_format
+# Parameters
+#     security_code: Raw ticker string, possibly already exchange-qualified
+#                    (e.g. ``PLX.AME``).
+#     exchange: Optional exchange identifier supplied by the upstream system.
+# Summary
+#     Normalise a ticker/exchange pair into the specific suffixes recognised by
+#     BGL.  The function handles a handful of bespoke overrides for securities
+#     that require special casing and maps exchange codes (NASDAQ, NYSE, OTC,
+#     etc.) onto BGL's abbreviated form.
 def ticker_bgl_format(security_code,exchange=None):
     if "." in security_code:
         ticker=security_code.split(".")[0]
         if exchange is None:
-            exchange=security_code.split(".")[1]        
+            exchange=security_code.split(".")[1]
     if ticker=="PER783RR7":
         return ticker
     if ticker=="GAZP":
@@ -60,20 +94,37 @@ def ticker_bgl_format(security_code,exchange=None):
         raise SystemExit(0)
     return new_ticker
 
+# Function: trade
+# Parameters
+#     root: XML tree root object.
+#     stock_transaction: Dictionary describing the trade pulled from the
+#                        history feed.
+#     with_bank: Boolean indicating whether the trade should be mirrored with a
+#                bank transaction entry (for cash settlement).
+#     end_row: Controls trailing whitespace for the investment transaction
+#              similar to ``new_transaction``.
+# Summary
+#     Construct a pair of transaction dictionaries representing the investment
+#     side of the trade and the corresponding bank ledger entry.  Buys/sells
+#     are reflected by manipulating the sign on the amount.  Each transaction is
+#     then inserted into the XML document via ``new_transaction``.
 def trade(root,stock_transaction,with_bank,end_row):
     investment={}
     investment["Transaction_Type"]="Investment Transaction"
     investment["Transaction_Date"]=stock_transaction["Transaction_Date"]
     investment["Description"]=stock_transaction["Description"]
     investment["Amount"]=str(abs(float(stock_transaction["Amount"])))
+    # Sells are stored as negative amounts to reflect cash inflows.
     if "sell" in investment["Description"].lower():
         investment["Amount"]="-"+investment["Amount"]
-    investment["Currency"]=stock_transaction["Currency"]    
+    investment["Currency"]=stock_transaction["Currency"]
     if investment["Currency"]=="USD":
         investment["Security_Type"]="Shares in Listed Companies (Overseas)"
     if "Exchange" in stock_transaction.keys():
+        # Normalise the ticker to the BGL format, respecting explicit exchange.
         investment["Security_Code"]=ticker_bgl_format(stock_transaction["Security_Code"],stock_transaction["Exchange"])
     else:
+        # Fall back to deriving the exchange from the security code.
         investment["Security_Code"]=ticker_bgl_format(stock_transaction["Security_Code"])
     investment["Quantity"]=stock_transaction["Quantity"]
     investment["Brokerage"]=stock_transaction["Brokerage"]
@@ -83,19 +134,34 @@ def trade(root,stock_transaction,with_bank,end_row):
     if with_bank==True:
         bank={}
         bank["Transaction_Type"]="Bank Transaction"
+        # Mirror the investment cashflow in the bank ledger (opposite sign).
         bank["Amount"]="-"+investment["Amount"]
         bank["Currency"]=investment["Currency"]
         bank["Transaction_Date"]=investment["Settlement_Date"]
         bank["Transaction_ID"]="BK"+stock_transaction["Transaction_ID"]
     print(investment)
+    # Always insert the bank leg first so it precedes the investment entry.
+    # Callers currently pass ``with_bank=True`` for trades so ``bank`` is
+    # guaranteed to exist here.
     new_transaction(root,bank)
     if end_row==True:
+        # Trim trailing indentation when this is the final transaction.
         new_transaction(root,investment,True)
     else:
         new_transaction(root,investment)
     #print("before return")
     return root
 
+# Function: bgl_xml
+# Parameters
+#     history_transactions: Iterable of transaction dictionaries pulled from an
+#                           upstream trading platform.
+# Summary
+#     Build the BGL XML document skeleton (Supplier/Product/Version and entity
+#     metadata) before iterating over the supplied transactions.  Each trade is
+#     translated into investment/bank entries and appended under the
+#     ``<Transactions>`` node.  Finally, the XML is written to ``BGL.xml`` using
+#     ISO-8859-1 encoding, matching Simple Fund 360 import expectations.
 def bgl_xml(history_transactions):
 #for cc in range(0,1):
     tree=ET.ElementTree()
@@ -120,12 +186,14 @@ def bgl_xml(history_transactions):
     entity_code=ET.SubElement(entity_details,"Entity_Code")
     entity_code.text="BGL"
     entity_code.tail="\n"+sp+sp
+    # <Transactions> is the container that holds all generated trade rows.
     transactions=ET.SubElement(entity_details,"Transactions")
     transactions.text="\n"+sp+sp+sp
     transactions.tail="\n"+sp
 
     for history_transaction in history_transactions:
         if history_transaction["Transaction_Type"]=="Trade":
+            # Create both bank and investment entries for every trade.
             trade(root,history_transaction,True,True)
 
     tree._setroot(root)
